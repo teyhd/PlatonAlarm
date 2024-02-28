@@ -299,7 +299,7 @@ namespace PlatonAlarm
             }
             else
             {
-                Play(LongMus[CountLong]);
+                Play(LongMus[CountLong],0.7f);
                 CountLong++;
             }
         } 
