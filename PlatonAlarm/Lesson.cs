@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -10,8 +10,11 @@ namespace PlatonAlarm
     {
         private DateTime Timestart = DateTime.Now;
         private DateTime Timestop = DateTime.Now;
+
         private List<DateTime> TimestartArr = new List<DateTime>();
         public List<DateTime> TimestopArr = new List<DateTime>();
+
+
         public Lesson()
         {
             Console.WriteLine(1);
@@ -64,67 +67,148 @@ namespace PlatonAlarm
             }
             return ans;
         }
+
         public string[] GetText()
         {
-            string[] ans = new string[3];
-            DateTime Test = DateTime.Now;
-            for (int i = 0; i < TimestartArr.Count; i++)
-            {
-              //  Console.WriteLine(Test);
-                // Test = DateTime.Parse("14:00");
-                // Test = DateTime.Parse("11:22");//перемена
-                int StartComp = DateTime.Compare(Test, TimestartArr[i]);
-                int StopComp = DateTime.Compare(Test, TimestopArr[i]);
-                //Console.WriteLine($"Урок №{i + 1}" );
-             //   Console.WriteLine("Начало " + StartComp);
-               //Console.WriteLine("Конец " + StopComp);
-                TimeSpan Ost;
-                Ost = TimestartArr[i].AddDays(1).Subtract(Test);
-                //Console.WriteLine(Ost.TotalSeconds);
-                ans[0] = $"До начала рабочего дня";
-                ans[1] = Ost.ToString(@"hh\:mm\:ss");
-                ans[2] = ((int)((Ost.TotalSeconds * 100) / 83940)).ToString();
-                
-                if (StartComp < 0)
-                {
-                    Ost = TimestartArr[i].Subtract(Test);
-                    if (i < 5)
-                    {
-                        ans[0] = $"До начала урока №{i + 1}";
-                    }
-                    else
-                    {
-                        ans[0] = $"До начала урока №{i}";
-                    }
-                    
-                    ans[2] = ((int)((Ost.TotalSeconds * 100) / 32400)).ToString();
-                    ans[1] = Ost.ToString(@"hh\:mm\:ss");
-                    break;
-                }
+            string[] ans = new string[4];
+            ans[3] = "f";
+            DateTime Test = DateTime.Now;  // Текущее время
 
-                if (StartComp >= 0 && StopComp <= 0)
+            if (Test.Second == 0)
+            {
+                Form1.RereadTime();
+            }
+            DateTime workStart = TimestartArr.First();  // Начало первого урока
+            DateTime workEnd = TimestopArr.Last();      // Окончание последнего урока
+
+            // Если текущее время до начала рабочего дня
+            if (DateTime.Compare(Test, workStart) < 0)
+            {
+                TimeSpan Ost = workStart.Subtract(Test);
+                ans[0] = "До начала рабочего дня";
+                ans[1] = Ost.ToString(@"hh\:mm\:ss");
+                ans[2] = ((int)((Ost.TotalSeconds * 100) / 32400)).ToString();  // Процент до начала рабочего дня
+            }
+            else if (DateTime.Compare(Test, workEnd) > 0)
+            {
+                DateTime nextDayStart = workStart.AddDays(1);  // Следующий рабочий день
+                TimeSpan Ost = nextDayStart.Subtract(Test);
+                ans[0] = "До начала рабочего дня";
+                ans[1] = Ost.ToString(@"hh\:mm\:ss");
+                ans[2] = "0";  // Процент завершения дня
+            }
+            else
+            {
+                for (int i = 0; i < TimestartArr.Count; i++)
                 {
-                    Ost = TimestopArr[i].Subtract(Test);
-                    if (i < 5)
+                    // Сравнение текущего времени с началом и окончанием урока
+                    int StartComp = DateTime.Compare(Test, TimestartArr[i]);
+                    int StopComp = DateTime.Compare(Test, TimestopArr[i]);
+
+                    TimeSpan Ost;
+
+                    // Если текущее время меньше времени начала урока
+                    if (StartComp < 0)
                     {
-                        ans[0] = $"До конца урока №{i + 1}";
+                        Ost = TimestartArr[i].Subtract(Test);
+                        if (i < 5)
+                        {
+                            ans[0] = $"До начала урока №{i + 1}";
+                        }
+                        else
+                        {
+                            ans[0] = $"До начала урока №{i}";
+                        }
+                       // ans[0] = $"До начала урока №{i + 1}";
+                        ans[1] = Ost.ToString(@"hh\:mm\:ss");
+                        ans[2] = ((int)((Ost.TotalSeconds * 100) / 32400)).ToString(); // Общий процент до начала рабочего дня (с учетом длины дня)
+
+                        break;
                     }
-                    else
+
+                    // Если текущее время между началом и окончанием урока
+                    if (StartComp >= 0 && StopComp <= 0)
                     {
-                        ans[0] = $"До конца урока №{i }";
+                        Ost = TimestopArr[i].Subtract(Test);
+                        if (i < 5)
+                        {
+                            ans[0] = $"До конца урока №{i + 1}";
+                        }
+                        else
+                        {
+                            ans[0] = $"До конца урока №{i }";
+                        }
+                        //ans[0] = $"До конца урока №{i + 1}";
+                        ans[1] = Ost.ToString(@"hh\:mm\:ss");
+                        ans[2] = ((int)((Ost.TotalSeconds * 100) / 2400)).ToString(); // Процент оставшегося времени урока (40 минут = 2400 секунд)
+                        ans[3] = "t";
+                        break;
                     }
-                    ans[2] = ((int)((Ost.TotalSeconds * 100) / 2400)).ToString();
-                    ans[1] = Ost.ToString(@"hh\:mm\:ss");
-                    break;
                 }
             }
-
-           //Console.WriteLine(ans[0]);
-            //Console.WriteLine(ans[1]);
-            //Console.WriteLine(ans[2]);
-            //Console.WriteLine(ans[3]);
-            return ans;
+                return ans;
         }
+        /* public string[] GetText()
+         {
+             string[] ans = new string[3];
+             DateTime Test = DateTime.Now;
+             for (int i = 0; i < TimestartArr.Count; i++)
+             {
+               //  Console.WriteLine(Test);
+                 // Test = DateTime.Parse("14:00");
+                 // Test = DateTime.Parse("11:22");//перемена
+                 int StartComp = DateTime.Compare(Test, TimestartArr[i]);
+                 int StopComp = DateTime.Compare(Test, TimestopArr[i]);
+                 //Console.WriteLine($"Урок №{i + 1}" );
+              //   Console.WriteLine("Начало " + StartComp);
+                //Console.WriteLine("Конец " + StopComp);
+                 TimeSpan Ost;
+                 Ost = TimestartArr[i].AddDays(1).Subtract(Test);
+                 //Console.WriteLine(Ost.TotalSeconds);
+                 ans[0] = $"До начала рабочего дня";
+                 ans[1] = Ost.ToString(@"hh\:mm\:ss");
+                 ans[2] = ((int)((Ost.TotalSeconds * 100) / 83940)).ToString();
+
+                 if (StartComp < 0)
+                 {
+                     Ost = TimestartArr[i].Subtract(Test);
+                     if (i < 5)
+                     {
+                         ans[0] = $"До начала урока №{i + 1}";
+                     }
+                     else
+                     {
+                         ans[0] = $"До начала урока №{i}";
+                     }
+
+                     ans[2] = ((int)((Ost.TotalSeconds * 100) / 32400)).ToString();
+                     ans[1] = Ost.ToString(@"hh\:mm\:ss");
+                     break;
+                 }
+
+                 if (StartComp >= 0 && StopComp <= 0)
+                 {
+                     Ost = TimestopArr[i].Subtract(Test);
+                     if (i < 5)
+                     {
+                         ans[0] = $"До конца урока №{i + 1}";
+                     }
+                     else
+                     {
+                         ans[0] = $"До конца урока №{i }";
+                     }
+                     ans[2] = ((int)((Ost.TotalSeconds * 100) / 2400)).ToString();
+                     ans[1] = Ost.ToString(@"hh\:mm\:ss");
+                     break;
+                 }
+             }
+
+            //Console.WriteLine(ans[0]);
+             //Console.WriteLine(ans[1]);
+             //Console.WriteLine(ans[2]);
+             //Console.WriteLine(ans[3]);
+             return ans;
+         } */
         public string[] UntilEnd()
         {
             string[] ans = new string[2];

@@ -1,4 +1,4 @@
-﻿using NAudio.Wave;
+using NAudio.Wave;
 using System;
 using System.IO;
 using System.Threading.Tasks;
@@ -7,18 +7,47 @@ using Newtonsoft.Json;
 using System.Runtime.InteropServices;
 using NAudio.CoreAudioApi;
 using System.Drawing;
-using System.Windows;
 using Microsoft.Win32;
 using System.Collections.Generic;
+using System.Web;
+using System.Threading;
 
 namespace PlatonAlarm
 {
     public partial class Form1 : Form
     {
-        static string AppPath = @"C:\Windows\secur\1";
+
+        //static string AppPath = (System.Environment.GetEnvironmentVariable("PLATONALARM_PATH_1") ?? throw new System.InvalidOperationException("Set PLATONALARM_PATH_1"));
+        static string AppPath = AppDomain.CurrentDomain.BaseDirectory;
+
+        static bool InSchool = true;
+
+        [DllImport("user32.dll", EntryPoint = "FindWindow", SetLastError = true)]
+        static extern IntPtr FindWindow(string lpClassName, string lpWindowName);
+        [DllImport("user32.dll", EntryPoint = "SendMessage", SetLastError = true)]
+        static extern IntPtr SendMessage(IntPtr hWnd, Int32 Msg, IntPtr wParam, IntPtr lParam);
+
+        const int WM_COMMAND = 0x111;
+        const int MIN_ALL = 419;
+        const int MIN_ALL_UNDO = 416;
+
         [DllImport("winmm.dll")]
         static extern int waveOutGetVolume(IntPtr hwo, out uint dwVolume);
-        public Lesson Less = new Lesson();
+        public static Lesson Less = new Lesson();
+
+        const int SPI_SETDESKWALLPAPER = 20;
+        const int SPIF_UPDATEINIFILE = 0x01;
+        const int SPIF_SENDWININICHANGE = 0x02;
+
+        [DllImport("user32.dll", CharSet = CharSet.Auto)]
+        static extern int SystemParametersInfo(int uAction, int uParam, string lpvParam, int fuWinIni);
+
+        public enum Style : int
+        {
+            Tiled,
+            Centered,
+            Stretched
+        }
         public Form1()
         {
             InitializeComponent();
@@ -26,6 +55,7 @@ namespace PlatonAlarm
             this.FormBorderStyle = FormBorderStyle.FixedSingle;
             this.TransparencyKey = Color.White;
             this.FormBorderStyle = FormBorderStyle.None;
+            this.ShowInTaskbar = false;
             Screen screen = Screen.FromPoint(Cursor.Position); // Получаем текущий экран
             //this.StartPosition = FormStartPosition.Manual; // Устанавливаем ручное позиционирование формы
             //this.Location = new Point(100, screen.WorkingArea.Height- label1.Height); // Устанавливаем позицию формы в правом верхнем углу экрана
@@ -41,14 +71,21 @@ namespace PlatonAlarm
                 progressBar1.Location = new Point(0, this.Height - progressBar1.Height - 45);
                 label1.Location = new Point(130, this.Height - label1.Height - 7);
                 label2.Location = new Point(this.Width - 450, this.Height - label2.Height);
+                button1.Location = new Point(130, this.Height - label1.Height - 7);
             }
             else
             {
                 progressBar1.Location = new Point(0, this.Height - progressBar1.Height - 40);
                 label1.Location = new Point(this.Width - label2.Width - 570, this.Height - label1.Height - 6);
                 label2.Location = new Point(this.Width - 450, this.Height - label2.Height);
+                button1.Location = new Point(130, this.Height - label2.Height);
             }
-
+            if (InSchool)
+            {
+                progressBar1.Hide();
+                button1.Hide();
+            }
+            progressBar1.Hide();
             Console.WriteLine(IsWindows11());
             // label1.Width = progressBar1.Width;
             //label2.Width = progressBar1.Width;
@@ -67,8 +104,13 @@ namespace PlatonAlarm
             TopMost = true;
             InitTime();
             InitMelody();
-           // AutoClosingMessageBox.Show("До конца урока осталось 10 минут!", "Внимание!", 10000);
+            // AutoClosingMessageBox.Show("До конца урока осталось 10 минут!", "Внимание!", 10000);
+            Setw();
             Play("gary-meow meloboom.mp3");
+
+
+            label1.ForeColor = System.Drawing.ColorTranslator.FromHtml("#1ABC9C");
+            label2.ForeColor = System.Drawing.ColorTranslator.FromHtml("#1ABC9C");
         }
 
         [DllImport("user32.dll")]
@@ -79,44 +121,59 @@ namespace PlatonAlarm
 
         void InitMelody()
         {
-            string Path = $"{AppPath}\\1";
-            foreach (string fileName in Directory.GetFiles(Path))
+            try
             {
-                
-                using (var audioFile = new AudioFileReader(fileName))
+                string Path = $"{AppPath}\\1";
+                foreach (string fileName in Directory.GetFiles(Path))
                 {
-                    // Console.WriteLine(audioFile.Length);
-                    string[] temp = fileName.Split('\\');
-                   if (audioFile.TotalTime.TotalSeconds < 8)
+
+                    using (var audioFile = new AudioFileReader(fileName))
                     {
-                        Console.WriteLine(temp[temp.Length-1]);
-                        Console.WriteLine(audioFile.TotalTime);
-                        ShMus.Add(temp[temp.Length-1]);
-                        listBox1.Items.Add(temp[temp.Length - 1]);
-                    } else
-                    {
-                        LongMus.Add(temp[temp.Length - 1]);
-                        Console.WriteLine(temp[temp.Length - 1]);
-                        Console.WriteLine(audioFile.TotalTime);
-                        listBox2.Items.Add(temp[temp.Length - 1]);
-                    }
-                    
-                };
+                        // Console.WriteLine(audioFile.Length);
+                        string[] temp = fileName.Split('\\');
+                        if (audioFile.TotalTime.TotalSeconds < 8)
+                        {
+                            Console.WriteLine(temp[temp.Length - 1]);
+                            Console.WriteLine(audioFile.TotalTime);
+                            ShMus.Add(temp[temp.Length - 1]);
+                            listBox1.Items.Add(temp[temp.Length - 1]);
+                        }
+                        else
+                        {
+                            LongMus.Add(temp[temp.Length - 1]);
+                            Console.WriteLine(temp[temp.Length - 1]);
+                            Console.WriteLine(audioFile.TotalTime);
+                            listBox2.Items.Add(temp[temp.Length - 1]);
+                        }
+
+                    };
+                }
+            } catch (Exception e)
+            {
+
             }
+
 
         }
         Boolean flagmus = true;
-        async void Play(string Path = "alarm.mp3",float Newval = 1.0f)
+        async void Play(string Path = "alarm.mp3",float Newval = 0.35f)
         {
+            if (InSchool)
+            {
+                await Task.Delay(2);
+                timer1.Enabled = true;
+                return;
+            }
             flagmus = false;
             Path = $"{AppPath}\\1\\{Path}";
             try
             {
                 var enumerator = new MMDeviceEnumerator();
                 var device = enumerator.GetDefaultAudioEndpoint(DataFlow.Render, Role.Multimedia);
+                keybd_event((byte)Keys.VolumeUp, 0, 0, 0); // increase volume
                 float volumeLevel = device.AudioEndpointVolume.MasterVolumeLevelScalar;
                 device.AudioEndpointVolume.MasterVolumeLevelScalar = Newval;
-                keybd_event((byte)Keys.VolumeUp, 0, 0, 0); // increase volume
+
                 using (var audioFile = new AudioFileReader(Path))
                 using (var outputDevice = new WaveOutEvent())
                 {
@@ -132,7 +189,7 @@ namespace PlatonAlarm
                         //Console.WriteLine(outputDevice.GetPosition());
                         await Task.Delay(1);
                     }
-                    
+
                 }
                 device.AudioEndpointVolume.MasterVolumeLevelScalar = volumeLevel;
                 timer1.Enabled = true;
@@ -174,24 +231,31 @@ namespace PlatonAlarm
                 Console.WriteLine(i);
             }
         }
-
-        private void InitTime(string filePath = "0.txt")
+        public static void RereadTime()
+        {
+            timer1.Enabled = false;
+            Less.ReloadTime();
+            InitTime();
+        }
+        private static void InitTime(string filePath = "0.txt")
         {
             filePath = $"{AppPath}\\{filePath}";
+            Console.WriteLine(filePath);
             try
             {
                 string jsonContent = File.ReadAllText(filePath);
                 dynamic jsonObject = JsonConvert.DeserializeObject(jsonContent);
                 foreach (var item in jsonObject)
                 {
-                   //Console.WriteLine((string)item.start);
-                    Less.AddTime((string)item.start, (string)item.stop);
+                   Console.WriteLine((string)item.start);
+                   Less.AddTime((string)item.start, (string)item.stop);
                 }
                 timer1.Enabled = true;
             }
             catch (Exception e)
             {
-                //LogError(e, "Shape processing failed.");
+                Console.Write(e.ToString(), "Shape processing failed.");
+
                 //throw;
             }
 
@@ -207,32 +271,42 @@ namespace PlatonAlarm
                 label2.Text = Less.GetText()[1];
                 progressBar1.Text = Less.GetText()[1];
                 progressBar1.Value = 100 - int.Parse(Less.GetText()[2]);
+               // Console.WriteLine(Less.GetText()[1].Split(':')[1]);
                 if (Less.GetText()[1].Split(':')[1] == "20")
                 {
                     timer1.Enabled = false;
                     Less.ReloadTime();
                     InitTime();
                 }
-                if (Less.GetText()[1] == "00:10:00")
+                if (Less.GetText()[1] == "00:10:00" && Less.GetText()[3] == "t" && !InSchool)
                 {
                     //PlayMelody();
                     timer1.Enabled = false;
+                    AutoClosingMessageBox.Show("До конца урока осталось 10 минут!", "Внимание!", 3000);
                     Play("ay-ya-ya meloboom.mp3");
-                    AutoClosingMessageBox.Show("До конца урока осталось 10 минут!", "Внимание!", 10000);
+
+                    label1.ForeColor = System.Drawing.ColorTranslator.FromHtml("#4A90E2");
+                    label2.ForeColor = System.Drawing.ColorTranslator.FromHtml("#4A90E2");
                     //timer1.Enabled = false;
                 }
-                if (Less.GetText()[1] == "00:05:00")
+                if (Less.GetText()[1] == "00:05:00" && Less.GetText()[3] == "t")
                 {
                     timer1.Enabled = false;
+                    AutoClosingMessageBox.Show("Осталось 5 минут! Сохраните свои работы!", "Внимание!", 3000);
                     ShortSong();
-                    AutoClosingMessageBox.Show("Осталось 5 минут! Сохраните свои работы!", "Внимание!", 10000);
                     //timer1.Enabled = true;
+
+                    label1.ForeColor = System.Drawing.ColorTranslator.FromHtml("#FFB74D");
+                    label2.ForeColor = System.Drawing.ColorTranslator.FromHtml("#FFB74D");
                 }
-                if (Less.GetText()[1] == "00:01:00")
+                if (Less.GetText()[1] == "00:01:00" && Less.GetText()[3] == "t")
                 {
                     timer1.Enabled = false;
+                    AutoClosingMessageBox.Show("Через минуту конец урока", "Внимание! Конец урока!", 10000);
                     Longsong();
-                    AutoClosingMessageBox.Show("Конец урока! Комьютеры заблокируются через 10 секнуд", "Внимание!", 10000);
+
+                    label1.ForeColor = System.Drawing.ColorTranslator.FromHtml("#1ABC9C");
+                    label2.ForeColor = System.Drawing.ColorTranslator.FromHtml("#1ABC9C");
                     //timer1.Enabled = true;
                 }
             }
@@ -240,7 +314,7 @@ namespace PlatonAlarm
             {
                 //LogError(e, "Shape processing failed.");
                // throw;
-            }           
+            }
         }
 
         private void Form1_FormClosing(object sender, FormClosingEventArgs e)
@@ -287,7 +361,7 @@ namespace PlatonAlarm
             {
                 CountLong--;
             }
-         
+
         }
 
         void Longsong()
@@ -299,10 +373,10 @@ namespace PlatonAlarm
             }
             else
             {
-                Play(LongMus[CountLong],0.7f);
+                Play(LongMus[CountLong],0.35f);
                 CountLong++;
             }
-        } 
+        }
 
         void ShortSong()
         {
@@ -336,6 +410,143 @@ namespace PlatonAlarm
         {
             string curItem = listBox2.SelectedItem.ToString();
             Play(curItem,0.3f);
+        }
+        public int clicked = 0;
+        public Random rng = new Random();
+
+        static public int wallp = -1;
+        static public int mem = 0;
+
+        static public int GetWallpaper()
+        {
+            try
+            {
+                int max = Directory.GetFiles((System.Environment.GetEnvironmentVariable("PLATONALARM_PATH_2") ?? throw new System.InvalidOperationException("Set PLATONALARM_PATH_2"))).Length - 2;
+                Console.WriteLine(max);
+                wallp++;
+                if (wallp > max)
+                {
+                    wallp = 0;
+                }
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine(e.ToString());
+                wallp = 0;
+            }
+
+            return wallp;
+        }
+
+        static public int GetWallpaperMem()
+        {
+            try
+            {
+                int max = Directory.GetFiles((System.Environment.GetEnvironmentVariable("PLATONALARM_PATH_3") ?? throw new System.InvalidOperationException("Set PLATONALARM_PATH_3"))).Length;
+                mem++;
+                if (mem > max)
+                {
+                    mem = 0;
+                }
+            }
+            catch (Exception e)
+            {
+                mem = 0;
+            }
+            return mem;
+        }
+
+        private void button1_Click(object sender, EventArgs e)
+        {
+            clicked++;
+            //button1.Text = "Кликов: "+ clicked.ToString();
+            button1.Text = clicked.ToString();
+            if (IsWindows11())
+            {
+                button1.Location = new Point(rng.Next(10,this.Width-10), this.Height - label1.Height - 7);
+            }
+            else
+            {
+                button1.Location = new Point(rng.Next(10, this.Width - 10), this.Height - label1.Height - 7);
+            }
+
+            if (clicked % 10 == 0)
+            {
+                Setw(true);
+                System.Threading.Thread.Sleep(3300);
+                Setw();
+            }
+            if (clicked == 1005)
+            {
+                AutoClosingMessageBox.Show("Ты победил!!! Покажи сообщение учителю, получи 5 по информатике", "Победа!", 3000);
+            }
+
+        }
+
+        public static void Setw(Boolean flag = false)
+        {
+            try
+            {
+                IntPtr lHwnd = FindWindow("Shell_TrayWnd", null);
+                // свернуть
+                SendMessage(lHwnd, WM_COMMAND, (IntPtr)MIN_ALL, IntPtr.Zero);
+                //  System.Threading.Thread.Sleep(2300);
+                // развернуть
+                // SendMessage(lHwnd, WM_COMMAND, (IntPtr)MIN_ALL_UNDO, IntPtr.Zero);
+
+                Style style = Style.Centered;
+                String uri;
+                if (flag)
+                { //ismem
+                    uri = Path.Combine((System.Environment.GetEnvironmentVariable("PLATONALARM_PATH_3") ?? throw new System.InvalidOperationException("Set PLATONALARM_PATH_3")), GetWallpaperMem().ToString() + ".jpg");
+                }
+                else
+                {
+                    uri = Path.Combine((System.Environment.GetEnvironmentVariable("PLATONALARM_PATH_2") ?? throw new System.InvalidOperationException("Set PLATONALARM_PATH_2")), GetWallpaper().ToString() + ".jpg");
+                }
+
+                //MessageBox.Show(uri);
+
+                //System.IO.Stream s = new System.Net.WebClient().OpenRead(uri.ToString());
+
+                // System.Drawing.Image img = System.Drawing.Image.FromStream(s);
+                string tempPath = uri;
+                // string tempPath = Path.Combine(Path.GetTempPath(), "wallpaper.bmp");
+                //img.Save(tempPath, System.Drawing.Imaging.ImageFormat.Bmp);
+
+                RegistryKey key = Registry.CurrentUser.OpenSubKey(@"Control Panel\Desktop", true);
+                if (style == Style.Stretched)
+                {
+                    key.SetValue(@"WallpaperStyle", 2.ToString());
+                    key.SetValue(@"TileWallpaper", 0.ToString());
+                }
+
+                if (style == Style.Centered)
+                {
+                    key.SetValue(@"WallpaperStyle", 1.ToString());
+                    key.SetValue(@"TileWallpaper", 0.ToString());
+                }
+
+                if (style == Style.Tiled)
+                {
+                    key.SetValue(@"WallpaperStyle", 1.ToString());
+                    key.SetValue(@"TileWallpaper", 1.ToString());
+                }
+
+                SystemParametersInfo(SPI_SETDESKWALLPAPER,
+                    0,
+                    tempPath,
+                    SPIF_UPDATEINIFILE | SPIF_SENDWININICHANGE);
+            } catch (Exception e)
+            {
+                //err
+            }
+
+        }
+
+        private void timer2_Tick(object sender, EventArgs e)
+        {
+
         }
     }
 }
